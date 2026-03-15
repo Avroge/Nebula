@@ -5,3 +5,6 @@ poster_cache/
 *.exe
 build/
 dist/
+.vscode/
+Backup/
+settings.json
