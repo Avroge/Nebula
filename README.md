@@ -104,6 +104,7 @@ Ils servent principalement à inspecter ou préparer la base Notion.
 
 ## Structure rapide
 
+```
 Nebula/
 │
 ├── app.py                 # Application principale (interface Tkinter)
@@ -127,6 +128,7 @@ Nebula/
     ├── inspect_data_source.py
     ├── prefill_tmdb_genres.py
     └── prefill_platforms.py
+```
 
 ## Bonnes pratiques
 
