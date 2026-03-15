@@ -10,9 +10,6 @@ from PIL import Image, ImageTk
 import tkinter as tk
 from tkinter import ttk, messagebox
 
-from pathlib import Path
-import sys
-
 
 def resource_path(filename: str) -> str:
     if getattr(sys, "frozen", False):
@@ -71,6 +68,9 @@ class App(tk.Tk):
         self._suggest_request_id = 0
         self._suggest_loading = False
         self._last_suggest_query = ""
+        self._network = requests.Session()
+        self._movies_by_status: dict[str | None, list[dict]] = {}
+        self._last_status_filter: str | None = None
 
         self.sort_dir_var = tk.StringVar(value="Décroissant")
         self.status_change_var = tk.StringVar(value="À voir")
@@ -206,13 +206,16 @@ class App(tk.Tk):
             textvariable=self.library_search_var,
         )
         library_search_entry.pack(side="left", padx=(6, 12))
-        library_search_entry.bind("<KeyRelease>", lambda e: self.refresh())
+        library_search_entry.bind(
+            "<KeyRelease>",
+            lambda e: self.refresh(fetch_remote=False),
+        )
 
         ttk.Label(left_controls, text="Filtre statut :").pack(side="left")
         self.filter_var = tk.StringVar(value="")
         filter_entry = ttk.Entry(left_controls, width=12, textvariable=self.filter_var)
         filter_entry.pack(side="left", padx=(6, 0))
-        filter_entry.bind("<Return>", lambda e: self.refresh())
+        filter_entry.bind("<Return>", lambda e: self.refresh(fetch_remote=True))
 
         middle_controls = ttk.Frame(top_row_1)
         middle_controls.grid(row=0, column=1, sticky="e")
@@ -227,7 +230,10 @@ class App(tk.Tk):
             state="readonly",
         )
         sort_combo.pack(side="left", padx=(6, 6))
-        sort_combo.bind("<<ComboboxSelected>>", lambda e: self.refresh())
+        sort_combo.bind(
+            "<<ComboboxSelected>>",
+            lambda e: self.refresh(fetch_remote=False),
+        )
 
         self.sort_dir_combo = ttk.Combobox(
             middle_controls,
@@ -237,7 +243,10 @@ class App(tk.Tk):
             state="readonly",
         )
         self.sort_dir_combo.pack(side="left", padx=(0, 0))
-        self.sort_dir_combo.bind("<<ComboboxSelected>>", lambda e: self.refresh())
+        self.sort_dir_combo.bind(
+            "<<ComboboxSelected>>",
+            lambda e: self.refresh(fetch_remote=False),
+        )
 
         # --- Ligne 2
         top_row_2 = ttk.Frame(top_controls)
@@ -258,7 +267,7 @@ class App(tk.Tk):
             state="readonly",
         )
         view_combo.pack(side="left", padx=(6, 12))
-        view_combo.bind("<<ComboboxSelected>>", lambda e: self.refresh())
+        view_combo.bind("<<ComboboxSelected>>", lambda e: self.refresh(fetch_remote=False))
 
         ttk.Label(view_controls, text="Taille des films :").pack(side="left")
         self.movie_size_var = tk.StringVar(value="Grand")
@@ -270,7 +279,7 @@ class App(tk.Tk):
             state="readonly",
         )
         size_combo.pack(side="left", padx=(6, 0))
-        size_combo.bind("<<ComboboxSelected>>", lambda e: self.refresh())
+        size_combo.bind("<<ComboboxSelected>>", lambda e: self.refresh(fetch_remote=False))
 
         right_controls = ttk.Frame(top_row_2)
         right_controls.grid(row=0, column=1, sticky="e")
@@ -428,7 +437,7 @@ class App(tk.Tk):
             if cache_file.exists():
                 img = Image.open(cache_file).convert("RGB")
             else:
-                r = requests.get(url, timeout=15)
+                r = self._network.get(url, timeout=15)
                 r.raise_for_status()
                 cache_file.write_bytes(r.content)
                 img = Image.open(io.BytesIO(r.content)).convert("RGB")
@@ -809,8 +818,6 @@ class App(tk.Tk):
         return columns
 
     def _on_movies_canvas_resize(self, event=None):
-        print("resize", event.width if event else "no event")
-
         if self.view_var.get() != "Galerie":
             return
 
@@ -849,7 +856,7 @@ class App(tk.Tk):
 
         try:
             self._is_refreshing_gallery = True
-            self.refresh()
+            self.refresh(fetch_remote=False)
         finally:
             self._is_refreshing_gallery = False
             self._resize_after_id = None
@@ -1123,6 +1130,17 @@ class App(tk.Tk):
         self._poster_job_index = 0
         self._load_next_poster()
 
+    def _load_movies(self, status_filter: str | None, force_remote: bool) -> list[dict]:
+        should_refresh_cache = force_remote or status_filter != self._last_status_filter
+        if should_refresh_cache:
+            self._movies_by_status[status_filter] = list_movies_detailed(
+                status=status_filter,
+                limit=100,
+            )
+            self._last_status_filter = status_filter
+
+        return list(self._movies_by_status.get(status_filter, []))
+
     def _load_next_poster(self):
         if self._poster_job_index >= len(self._poster_jobs):
             self._load_queue_after_id = None
@@ -1171,12 +1189,12 @@ class App(tk.Tk):
 
         self._start_progressive_poster_loading(jobs)
 
-    def refresh(self):
+    def refresh(self, fetch_remote: bool = True):
         try:
             self.clear_movie_cards()
 
             filt = self.filter_var.get().strip() or None
-            movies = list_movies_detailed(status=filt, limit=100)
+            movies = self._load_movies(filt, force_remote=fetch_remote)
 
             search_text = self.library_search_var.get().strip().lower()
             if search_text:
@@ -1201,12 +1219,6 @@ class App(tk.Tk):
         except Exception as e:
             self.status.set("Erreur.")
             messagebox.showerror("Erreur", str(e))
-
-    def _get_selected_title(self):
-        title = self.title_var.get().strip()
-        if not title and self.selected_movie:
-            title = self.selected_movie.get("title", "").strip()
-        return title
 
     def on_change_status(self):
         title = self._get_selected_title()
