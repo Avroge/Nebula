@@ -84,31 +84,43 @@ Le module `notion_movies.py` expose des fonctions réutilisables (ex: `auto_add`
 
 ---
 
-## Scripts utilitaires présents
+## Scripts utilitaires
 
-- `inspect_db.py` : inspection de la base/data source Notion.
-- `inspect_data_source.py` : vérification de la structure côté Notion.
-- `prefill_tmdb_genres.py` : préremplissage/gestion des genres TMDB.
-- `prefill_platforms.py` : aide au préremplissage des plateformes.
+Les scripts utilitaires se trouvent dans le dossier `scripts/`.
 
----
+Ils servent principalement à inspecter ou préparer la base Notion.
+
+- `scripts/inspect_db.py`  
+  Inspecte la structure de la base Notion.
+
+- `scripts/inspect_data_source.py`  
+  Inspecte les propriétés de la data source Notion.
+
+- `scripts/prefill_tmdb_genres.py`  
+  Pré-remplit les genres TMDB dans Notion.
+
+- `scripts/prefill_platforms.py`  
+  Pré-remplit les plateformes de streaming dans Notion.
 
 ## Structure rapide
 
-```text
-.
-├── app.py                 # UI Tkinter
+Nebula/
+│
+├── app.py                 # Application principale (interface)
 ├── notion_movies.py       # Logique Notion + TMDB
-├── movies_cli.py          # CLI legacy / expérimental
-├── inspect_db.py
-├── inspect_data_source.py
-├── prefill_tmdb_genres.py
-├── prefill_platforms.py
-├── settings.json          # Préférences UI
-└── README.md
-```
-
----
+├── movies_cli.py          # Interface CLI optionnelle
+├── nebula.spec            # Configuration PyInstaller
+├── nebula.ico             # Icône de l'application
+├── requirements.txt       # Dépendances Python
+├── run.bat                # Lancement rapide sous Windows
+├── .env.example           # Exemple de configuration
+├── README.md
+│
+└── scripts/               # Scripts utilitaires
+    ├── inspect_db.py
+    ├── inspect_data_source.py
+    ├── prefill_tmdb_genres.py
+    └── prefill_platforms.py
 
 ## Bonnes pratiques
 
