@@ -3,3 +3,5 @@ __pycache__/
 poster_cache/
 *.log
 *.exe
+build/
+dist/
