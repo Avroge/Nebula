@@ -106,17 +106,23 @@ Ils servent principalement à inspecter ou préparer la base Notion.
 
 Nebula/
 │
-├── app.py                 # Application principale (interface)
-├── notion_movies.py       # Logique Notion + TMDB
-├── movies_cli.py          # Interface CLI optionnelle
-├── nebula.spec            # Configuration PyInstaller
-├── nebula.ico             # Icône de l'application
-├── requirements.txt       # Dépendances Python
-├── run.bat                # Lancement rapide sous Windows
-├── .env.example           # Exemple de configuration
-├── README.md
+├── app.py                 # Application principale (interface Tkinter)
+├── notion_movies.py       # Logique principale : Notion + TMDB
+├── movies_cli.py          # Interface en ligne de commande (optionnelle)
 │
-└── scripts/               # Scripts utilitaires
+├── nebula.spec            # Configuration PyInstaller pour build .exe
+├── nebula.ico             # Icône de l'application
+│
+├── requirements.txt       # Dépendances Python
+├── run.bat                # Script de lancement rapide (Windows)
+├── .env.example           # Exemple de configuration des variables d'environnement
+├── README.md              # Documentation du projet
+│
+├── Nebula_App/            # Ressources utilisées par l'application
+│   ├── nebula.ico
+│   └── settings.json
+│
+└── scripts/               # Scripts utilitaires pour Notion
     ├── inspect_db.py
     ├── inspect_data_source.py
     ├── prefill_tmdb_genres.py
