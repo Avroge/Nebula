@@ -72,7 +72,6 @@ class App(tk.Tk):
         self._movies_by_status: dict[str | None, list[dict]] = {}
         self._last_status_filter: str | None = None
         self._pending_scroll_restore = None
-        self._scroll_restore = None
         self._scroll_restore_y = None
 
         self.sort_dir_var = tk.StringVar(value="Décroissant")
@@ -399,6 +398,7 @@ class App(tk.Tk):
 
         self.protocol("WM_DELETE_WINDOW", self._on_app_close)
 
+        self._save_scroll_position()
         self.refresh()
 
     # =========================
@@ -568,6 +568,7 @@ class App(tk.Tk):
             res = auto_add_by_tmdb_id(it["id"])
             plat = res.get("platform") or "inconnue"
             self.status.set(f"Ajouté: {res['title']} | Plateforme: {plat}")
+            self._save_scroll_position()
             self.refresh()
         except Exception as e:
             self.status.set("Erreur.")
@@ -720,6 +721,7 @@ class App(tk.Tk):
                     pass
 
             self.status.set(f"{added} films ajoutés")
+            self._save_scroll_position()
             self.refresh()
             win.destroy()
 
@@ -757,7 +759,7 @@ class App(tk.Tk):
             update_status(title, new_status)
             self.status_change_var.set(new_status)
             self.status.set(f"Statut modifié : {title} → {new_status}")
-            self._scroll_restore = self.movies_canvas.yview()[0]
+            self._save_scroll_position()
             self.refresh()
         except Exception as e:
             self.status.set("Erreur.")
@@ -791,6 +793,7 @@ class App(tk.Tk):
             res = auto_add(title)
             plat = res.get("platform") or "inconnue"
             self.status.set(f"Ajouté: {res['title']} | Plateforme: {plat}")
+            self._save_scroll_position()
             self.refresh()
         except Exception as e:
             self.status.set("Erreur.")
@@ -813,6 +816,7 @@ class App(tk.Tk):
             self.status.set("Mise à jour…")
             mark_seen(title)
             self.status.set(f"Marqué comme Vu: {title}")
+            self._save_scroll_position()
             self.refresh()
         except Exception as e:
             self.status.set("Erreur.")
@@ -1236,8 +1240,6 @@ class App(tk.Tk):
 
     def refresh(self, fetch_remote: bool = True):
         try:
-            restore_scroll = self._scroll_restore
-
             self.clear_movie_cards()
 
             filt = self.filter_var.get().strip() or None
@@ -1259,11 +1261,7 @@ class App(tk.Tk):
             else:
                 self._display_list_view(movies)
 
-            if restore_scroll is not None:
-                self.after_idle(lambda: self.movies_canvas.yview_moveto(restore_scroll))
-                self._scroll_restore = None
-            else:
-                self.after_idle(lambda: self.movies_canvas.yview_moveto(0))
+            self.after_idle(self._restore_scroll_position)
 
             self.status.set(f"Liste mise à jour. {len(movies)} film(s).")
             self._save_settings()
@@ -1289,7 +1287,7 @@ class App(tk.Tk):
             self.status.set("Mise à jour du statut…")
             update_status(title, new_status)
             self.status.set(f"Statut modifié : {title} → {new_status}")
-            self._scroll_restore = self.movies_canvas.yview()[0]
+            self._save_scroll_position()
             self.refresh()
         except Exception as e:
             self.status.set("Erreur.")
@@ -1317,7 +1315,7 @@ class App(tk.Tk):
             self.title_var.set("")
             self.selected_movie = None
             self.status.set(f"Film supprimé : {title}")
-            self._scroll_restore = self.movies_canvas.yview()[0]
+            self._save_scroll_position()
             self.refresh()
         except Exception as e:
             self.status.set("Erreur.")
