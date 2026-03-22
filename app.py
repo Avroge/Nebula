@@ -73,6 +73,7 @@ class App(tk.Tk):
         self._last_status_filter: str | None = None
         self._pending_scroll_restore = None
         self._scroll_restore = None
+        self._scroll_restore_y = None
 
         self.sort_dir_var = tk.StringVar(value="Décroissant")
         self.status_change_var = tk.StringVar(value="À voir")
@@ -415,6 +416,40 @@ class App(tk.Tk):
 
         for child in widget.winfo_children():
             self._bind_mousewheel_recursive(child, handler)
+
+    def _save_scroll_position(self):
+        try:
+            self._scroll_restore_y = self.movies_canvas.canvasy(0)
+        except Exception:
+            self._scroll_restore_y = None
+
+    def _restore_scroll_position(self):
+        try:
+            y = self._scroll_restore_y
+            self._scroll_restore_y = None
+
+            if y is None:
+                self.movies_canvas.yview_moveto(0)
+                return
+
+            self.update_idletasks()
+            bbox = self.movies_canvas.bbox("all")
+            if not bbox:
+                self.movies_canvas.yview_moveto(0)
+                return
+
+            total_height = bbox[3] - bbox[1]
+            canvas_height = self.movies_canvas.winfo_height()
+            max_scroll = max(0, total_height - canvas_height)
+
+            if max_scroll <= 0:
+                self.movies_canvas.yview_moveto(0)
+                return
+
+            y = max(0, min(y, max_scroll))
+            self.movies_canvas.yview_moveto(y / max_scroll)
+        except Exception:
+            self.movies_canvas.yview_moveto(0)
 
     # =========================
     # Images
