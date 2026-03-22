@@ -423,33 +423,33 @@ class App(tk.Tk):
         except Exception:
             self._scroll_restore_y = None
 
-    def _restore_scroll_position(self):
+    def _restore_scroll_position(self, clear: bool = True):
         try:
             y = self._scroll_restore_y
-            self._scroll_restore_y = None
 
             if y is None:
-                self.movies_canvas.yview_moveto(0)
                 return
 
             self.update_idletasks()
             bbox = self.movies_canvas.bbox("all")
             if not bbox:
-                self.movies_canvas.yview_moveto(0)
                 return
 
             total_height = bbox[3] - bbox[1]
-            canvas_height = self.movies_canvas.winfo_height()
-            max_scroll = max(0, total_height - canvas_height)
-
-            if max_scroll <= 0:
-                self.movies_canvas.yview_moveto(0)
+            if total_height <= 0:
                 return
 
-            y = max(0, min(y, max_scroll))
-            self.movies_canvas.yview_moveto(y / max_scroll)
+            canvas_height = self.movies_canvas.winfo_height()
+            max_top_y = max(0, total_height - canvas_height)
+
+            y = max(0, min(y, max_top_y))
+
+            self.movies_canvas.yview_moveto(y / total_height)
+
+            if clear:
+                self._scroll_restore_y = None
         except Exception:
-            self.movies_canvas.yview_moveto(0)
+            pass
 
     # =========================
     # Images
@@ -895,9 +895,10 @@ class App(tk.Tk):
         if self.view_var.get() != "Galerie":
             return
 
+        self._save_scroll_position()
         self.clear_movie_cards()
         self._display_gallery_view(self.current_movies)
-        self.movies_canvas.yview_moveto(0)
+        self.after_idle(self._restore_scroll_position)
 
     def _refresh_gallery_layout(self):
         if self.view_var.get() != "Galerie":
@@ -1002,14 +1003,23 @@ class App(tk.Tk):
         )
         card.pack(fill="x", expand=True)
 
-        poster_holder = tk.Label(
+        poster_box = tk.Frame(
             card,
+            width=list_poster_size[0],
+            height=list_poster_size[1],
+            bg="white",
+        )
+        poster_box.grid(row=0, column=0, rowspan=4, sticky="nw", padx=(0, 10))
+        poster_box.grid_propagate(False)
+
+        poster_holder = tk.Label(
+            poster_box,
             text="[chargement...]",
             bg="white",
             anchor="center",
             justify="center",
         )
-        poster_holder.grid(row=0, column=0, rowspan=4, sticky="nw", padx=(0, 10))
+        poster_holder.pack(fill="both", expand=True)
 
         title = movie.get("title") or "(sans titre)"
         year = movie.get("year")
@@ -1104,15 +1114,24 @@ class App(tk.Tk):
         )
         card.grid(row=row, column=col, padx=8, pady=8, sticky="n")
 
-        poster_holder = tk.Label(
+        poster_box = tk.Frame(
             card,
+            width=gallery_poster_size[0],
+            height=gallery_poster_size[1],
+            bg="white",
+        )
+        poster_box.pack()
+        poster_box.pack_propagate(False)
+
+        poster_holder = tk.Label(
+            poster_box,
             text="[chargement...]",
             bg="white",
             anchor="center",
             justify="center",
             wraplength=180,
         )
-        poster_holder.pack()
+        poster_holder.pack(fill="both", expand=True)
 
         title = movie.get("title") or "(sans titre)"
         year = movie.get("year")
@@ -1261,7 +1280,11 @@ class App(tk.Tk):
             else:
                 self._display_list_view(movies)
 
-            self.after_idle(self._restore_scroll_position)
+            if self.view_var.get() == "Galerie":
+                self.after_idle(self._restore_scroll_position)
+            else:
+                self.after_idle(lambda: self._restore_scroll_position(clear=False))
+                self.after(120, self._restore_scroll_position)
 
             self.status.set(f"Liste mise à jour. {len(movies)} film(s).")
             self._save_settings()
