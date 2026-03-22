@@ -1,6 +1,6 @@
-# Nebula
+# Nébula
 
-Nebula est une application Python pour gérer une watchlist de films dans **Notion**, enrichie automatiquement avec les données de **TMDB** (titre, année, note, genres, affiche et plateforme de visionnage).
+Nébula est une application Python pour gérer une watchlist de films dans **Notion**, enrichie automatiquement avec les données de **TMDB** (titre, année, note, genres, affiche et plateforme de visionnage).
 
 Le projet propose :
 - une **interface graphique** (`app.py`) pour un usage quotidien,
@@ -105,7 +105,7 @@ Ils servent principalement à inspecter ou préparer la base Notion.
 ## Structure rapide
 
 ```
-Nebula/
+Nébula/
 │
 ├── app.py                 # Application principale (interface Tkinter)
 ├── notion_movies.py       # Logique principale : Notion + TMDB

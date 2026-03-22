@@ -218,8 +218,10 @@ def upsert_movie(
 
     props = {
         PROP_TITLE: {"title": [{"text": {"content": title}}]},
-        PROP_STATUS: {"status": {"name": status}},
     }
+
+    if not page_id:
+        props[PROP_STATUS] = {"status": {"name": status}}
 
     if year is not None:
         props[PROP_YEAR] = {"number": int(year)}

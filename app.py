@@ -71,6 +71,8 @@ class App(tk.Tk):
         self._network = requests.Session()
         self._movies_by_status: dict[str | None, list[dict]] = {}
         self._last_status_filter: str | None = None
+        self._pending_scroll_restore = None
+        self._scroll_restore = None
 
         self.sort_dir_var = tk.StringVar(value="Décroissant")
         self.status_change_var = tk.StringVar(value="À voir")
@@ -267,7 +269,9 @@ class App(tk.Tk):
             state="readonly",
         )
         view_combo.pack(side="left", padx=(6, 12))
-        view_combo.bind("<<ComboboxSelected>>", lambda e: self.refresh(fetch_remote=False))
+        view_combo.bind(
+            "<<ComboboxSelected>>", lambda e: self.refresh(fetch_remote=False)
+        )
 
         ttk.Label(view_controls, text="Taille des films :").pack(side="left")
         self.movie_size_var = tk.StringVar(value="Grand")
@@ -279,7 +283,9 @@ class App(tk.Tk):
             state="readonly",
         )
         size_combo.pack(side="left", padx=(6, 0))
-        size_combo.bind("<<ComboboxSelected>>", lambda e: self.refresh(fetch_remote=False))
+        size_combo.bind(
+            "<<ComboboxSelected>>", lambda e: self.refresh(fetch_remote=False)
+        )
 
         right_controls = ttk.Frame(top_row_2)
         right_controls.grid(row=0, column=1, sticky="e")
@@ -375,11 +381,11 @@ class App(tk.Tk):
         )
         self.movie_menu.add_command(
             label="Marquer comme À revoir",
-            command=lambda: self._change_status_to("Vu"),
+            command=lambda: self._change_status_to("À revoir"),
         )
         self.movie_menu.add_command(
             label="Marquer comme En cours",
-            command=lambda: self._change_status_to("Vu"),
+            command=lambda: self._change_status_to("En cours"),
         )
         self.movie_menu.add_separator()
         self.movie_menu.add_command(
@@ -464,6 +470,8 @@ class App(tk.Tk):
     # Suggestions
     # =========================
     def hide_suggestions(self):
+        self.hide_movie_preview()
+
         for child in self.suggest_inner.winfo_children():
             child.destroy()
 
@@ -518,6 +526,7 @@ class App(tk.Tk):
         it = self._suggestions[idx]
         self.title_var.set(it["title"])
         self.hide_suggestions()
+        self.hide_movie_preview()
 
         try:
             self.status.set("Ajout en cours…")
@@ -713,6 +722,7 @@ class App(tk.Tk):
             update_status(title, new_status)
             self.status_change_var.set(new_status)
             self.status.set(f"Statut modifié : {title} → {new_status}")
+            self._scroll_restore = self.movies_canvas.yview()[0]
             self.refresh()
         except Exception as e:
             self.status.set("Erreur.")
@@ -1191,6 +1201,8 @@ class App(tk.Tk):
 
     def refresh(self, fetch_remote: bool = True):
         try:
+            restore_scroll = self._scroll_restore
+
             self.clear_movie_cards()
 
             filt = self.filter_var.get().strip() or None
@@ -1212,9 +1224,13 @@ class App(tk.Tk):
             else:
                 self._display_list_view(movies)
 
-            self.movies_canvas.yview_moveto(0)
-            self.status.set(f"Liste mise à jour. {len(movies)} film(s).")
+            if restore_scroll is not None:
+                self.after_idle(lambda: self.movies_canvas.yview_moveto(restore_scroll))
+                self._scroll_restore = None
+            else:
+                self.after_idle(lambda: self.movies_canvas.yview_moveto(0))
 
+            self.status.set(f"Liste mise à jour. {len(movies)} film(s).")
             self._save_settings()
         except Exception as e:
             self.status.set("Erreur.")
@@ -1238,6 +1254,7 @@ class App(tk.Tk):
             self.status.set("Mise à jour du statut…")
             update_status(title, new_status)
             self.status.set(f"Statut modifié : {title} → {new_status}")
+            self._scroll_restore = self.movies_canvas.yview()[0]
             self.refresh()
         except Exception as e:
             self.status.set("Erreur.")
@@ -1265,6 +1282,7 @@ class App(tk.Tk):
             self.title_var.set("")
             self.selected_movie = None
             self.status.set(f"Film supprimé : {title}")
+            self._scroll_restore = self.movies_canvas.yview()[0]
             self.refresh()
         except Exception as e:
             self.status.set("Erreur.")
