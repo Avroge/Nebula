@@ -5,25 +5,19 @@ from notion_client import Client
 load_dotenv()
 
 NOTION_TOKEN = os.getenv("NOTION_TOKEN")
-DATABASE_ID = os.getenv("NOTION_DATABASE_ID")
+DATA_SOURCE_ID = os.getenv("NOTION_DATA_SOURCE_ID")
 NOTION_VERSION = os.getenv("NOTION_VERSION", "2025-09-03")
+
+if not NOTION_TOKEN or not DATA_SOURCE_ID:
+    raise SystemExit("ERREUR: NOTION_TOKEN / NOTION_DATA_SOURCE_ID manquant dans .env")
 
 notion = Client(auth=NOTION_TOKEN, notion_version=NOTION_VERSION)
 
-db = notion.databases.retrieve(database_id=DATABASE_ID)
-
-data_sources = db.get("data_sources", [])
-if not data_sources:
-    raise SystemExit("ERREUR: Aucun data_source trouvé dans ce database.")
-
-# En général il n’y en a qu’un
-DATA_SOURCE_ID = data_sources[0]["id"]
-print("Data source id:", DATA_SOURCE_ID)
-print("Data source name:", data_sources[0].get("name"))
-
-# notion-sdk-py n’a pas toujours un wrapper 'data_sources', donc on appelle l’API “raw”
 ds = notion.request(f"data_sources/{DATA_SOURCE_ID}", "GET")
 
+print("Data source id:", ds.get("id"))
+print("Data source name:", ds.get("name"))
+
 print("\nProperties:")
-for name, prop in ds["properties"].items():
+for name, prop in ds.get("properties", {}).items():
     print(f"- {name}: {prop['type']}")

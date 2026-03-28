@@ -411,6 +411,13 @@ class App(tk.Tk):
     def _on_mousewheel_movies(self, event):
         self.movies_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
 
+        # Clamp explicite en haut
+        top, _ = self.movies_canvas.yview()
+        if top <= 0.001:
+            self.movies_canvas.yview_moveto(0)
+
+        return "break"
+
     def _bind_mousewheel_recursive(self, widget, handler):
         widget.bind("<MouseWheel>", handler)
 
@@ -444,7 +451,11 @@ class App(tk.Tk):
 
             y = max(0, min(y, max_top_y))
 
-            self.movies_canvas.yview_moveto(y / total_height)
+            # Si on est quasiment au tout début, on colle franchement en haut
+            if y <= 2:
+                self.movies_canvas.yview_moveto(0)
+            else:
+                self.movies_canvas.yview_moveto(y / total_height)
 
             if clear:
                 self._scroll_restore_y = None
@@ -757,10 +768,11 @@ class App(tk.Tk):
         try:
             self.status.set("Mise à jour du statut…")
             update_status(title, new_status)
+            self._apply_status_change_local(title, new_status)
             self.status_change_var.set(new_status)
             self.status.set(f"Statut modifié : {title} → {new_status}")
             self._save_scroll_position()
-            self.refresh()
+            self.refresh(fetch_remote=False)
         except Exception as e:
             self.status.set("Erreur.")
             messagebox.showerror("Erreur", str(e))
@@ -774,8 +786,69 @@ class App(tk.Tk):
             return "À voir", "#1565c0"
         if s in ("à revoir", "a revoir"):
             return "À revoir", "#ef6c00"
+        if s == "en cours":
+            return "En cours", "#f9a825"
 
         return status or "Sans statut", "#616161"
+
+    def _apply_status_change_local(self, title: str, new_status: str):
+        title = (title or "").strip()
+        if not title:
+            return
+
+        updated_movie = None
+
+        # Cache global / non filtré
+        all_movies = self._movies_by_status.get(None, [])
+        for movie in all_movies:
+            if (movie.get("title") or "").strip() == title:
+                movie["status"] = new_status
+                updated_movie = dict(movie)
+                break
+
+        # Si le film n'est pas dans le cache global, on met quand même à jour
+        # ce qu'on peut dans la vue courante.
+        if updated_movie is None:
+            for movie in self.current_movies:
+                if (movie.get("title") or "").strip() == title:
+                    movie["status"] = new_status
+                    updated_movie = dict(movie)
+                    break
+
+        # Met à jour les caches filtrés déjà chargés
+        for status_key, movies in list(self._movies_by_status.items()):
+            if status_key is None:
+                continue
+
+            new_list = []
+            found_here = False
+
+            for movie in movies:
+                if (movie.get("title") or "").strip() == title:
+                    found_here = True
+                    movie = dict(movie)
+                    movie["status"] = new_status
+
+                # On garde uniquement les films qui correspondent encore au filtre
+                if (movie.get("status") or "") == status_key:
+                    new_list.append(movie)
+
+            # Si le film doit apparaître dans ce filtre et qu'on ne l'a pas déjà,
+            # on l'ajoute si on a ses données.
+            if (
+                updated_movie is not None
+                and status_key == new_status
+                and not any((m.get("title") or "").strip() == title for m in new_list)
+            ):
+                new_list.append(dict(updated_movie))
+
+            self._movies_by_status[status_key] = new_list
+
+        if (
+            self.selected_movie
+            and (self.selected_movie.get("title") or "").strip() == title
+        ):
+            self.selected_movie["status"] = new_status
 
     # =========================
     # Actions
@@ -1203,7 +1276,6 @@ class App(tk.Tk):
         if should_refresh_cache:
             self._movies_by_status[status_filter] = list_movies_detailed(
                 status=status_filter,
-                limit=100,
             )
             self._last_status_filter = status_filter
 
@@ -1280,14 +1352,9 @@ class App(tk.Tk):
             else:
                 self._display_list_view(movies)
 
-            if self.view_var.get() == "Galerie":
-                self.after_idle(self._restore_scroll_position)
-            else:
-                self.after_idle(lambda: self._restore_scroll_position(clear=False))
-                self.after(120, self._restore_scroll_position)
+            self.after_idle(self._restore_scroll_position)
 
             self.status.set(f"Liste mise à jour. {len(movies)} film(s).")
-            self._save_settings()
         except Exception as e:
             self.status.set("Erreur.")
             messagebox.showerror("Erreur", str(e))
@@ -1309,9 +1376,10 @@ class App(tk.Tk):
         try:
             self.status.set("Mise à jour du statut…")
             update_status(title, new_status)
+            self._apply_status_change_local(title, new_status)
             self.status.set(f"Statut modifié : {title} → {new_status}")
             self._save_scroll_position()
-            self.refresh()
+            self.refresh(fetch_remote=False)
         except Exception as e:
             self.status.set("Erreur.")
             messagebox.showerror("Erreur", str(e))

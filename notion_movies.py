@@ -54,6 +54,14 @@ PROVIDER_NAME_MAP_FR = {
 _TMDB_GENRE_CACHE = None
 
 
+def normalize_title(title: str) -> str:
+    s = unicodedata.normalize("NFKD", title)
+    s = "".join(c for c in s if not unicodedata.combining(c))
+    s = s.lower().strip()
+    s = re.sub(r"[^a-z0-9]+", "", s)
+    return s
+
+
 def _norm_key(s: str) -> str:
     s = unicodedata.normalize("NFKD", s)
     s = "".join(c for c in s if not unicodedata.combining(c))
@@ -193,14 +201,37 @@ def fetch_tmdb_watch_platform(movie_id: int, region: str = "FR") -> str | None:
 
 
 def find_movie_by_title(title: str) -> str | None:
-    body = {
-        "filter": {"property": PROP_TITLE, "title": {"equals": title}},
-        "page_size": 1,
-    }
+    target = normalize_title(title)
 
-    res = notion.request(f"data_sources/{DATA_SOURCE_ID}/query", "POST", body=body)
-    results = res.get("results", [])
-    return results[0]["id"] if results else None
+    next_cursor = None
+
+    while True:
+        body = {
+            "page_size": 100,
+        }
+
+        if next_cursor:
+            body["start_cursor"] = next_cursor
+
+        res = notion.request(f"data_sources/{DATA_SOURCE_ID}/query", "POST", body=body)
+
+        for page in res.get("results", []):
+            props = page.get("properties", {})
+
+            title_arr = props.get(PROP_TITLE, {}).get("title", [])
+            existing_title = title_arr[0].get("plain_text") if title_arr else ""
+
+            if normalize_title(existing_title) == target:
+                return page["id"]
+
+        if not res.get("has_more"):
+            break
+
+        next_cursor = res.get("next_cursor")
+        if not next_cursor:
+            break
+
+    return None
 
 
 def upsert_movie(
@@ -297,54 +328,74 @@ def list_movies(status: str | None = None, limit: int = 50) -> list[tuple[str, s
     return out
 
 
-def list_movies_detailed(status: str | None = None, limit: int = 50) -> list[dict]:
-    body = {"page_size": limit}
-
-    if status:
-        body["filter"] = {"property": PROP_STATUS, "status": {"equals": status}}
-
-    res = notion.request(f"data_sources/{DATA_SOURCE_ID}/query", "POST", body=body)
-
+def list_movies_detailed(
+    status: str | None = None, limit: int | None = None
+) -> list[dict]:
     out = []
-    for page in res.get("results", []):
-        props = page.get("properties", {})
+    next_cursor = None
 
-        title_arr = props.get(PROP_TITLE, {}).get("title", [])
-        title = title_arr[0].get("plain_text") if title_arr else "(sans titre)"
+    while True:
+        body = {
+            "page_size": 100,
+        }
 
-        status_obj = props.get(PROP_STATUS, {}).get("status", {})
-        movie_status = status_obj.get("name") if status_obj else ""
+        if status:
+            body["filter"] = {"property": PROP_STATUS, "status": {"equals": status}}
 
-        year = props.get(PROP_YEAR, {}).get("number")
-        rating = props.get(PROP_RATING, {}).get("number")
-        poster_files = props.get(PROP_POSTER, {}).get("files", [])
-        poster_url = None
+        if next_cursor:
+            body["start_cursor"] = next_cursor
 
-        if poster_files:
-            first_file = poster_files[0]
-            if first_file.get("type") == "external":
-                poster_url = first_file.get("external", {}).get("url")
-            elif first_file.get("type") == "file":
-                poster_url = first_file.get("file", {}).get("url")
+        res = notion.request(f"data_sources/{DATA_SOURCE_ID}/query", "POST", body=body)
 
-        platform_obj = props.get(PROP_PLATFORM, {}).get("select")
-        platform = platform_obj.get("name") if platform_obj else ""
+        for page in res.get("results", []):
+            props = page.get("properties", {})
 
-        genre_arr = props.get(PROP_GENRE, {}).get("multi_select", [])
-        genres = [g.get("name") for g in genre_arr if g.get("name")]
+            title_arr = props.get(PROP_TITLE, {}).get("title", [])
+            title = title_arr[0].get("plain_text") if title_arr else "(sans titre)"
 
-        out.append(
-            {
-                "id": page["id"],
-                "title": title,
-                "status": movie_status,
-                "year": year,
-                "rating": rating,
-                "platform": platform,
-                "genres": genres,
-                "poster_url": poster_url,
-            }
-        )
+            status_obj = props.get(PROP_STATUS, {}).get("status", {})
+            movie_status = status_obj.get("name") if status_obj else ""
+
+            year = props.get(PROP_YEAR, {}).get("number")
+            rating = props.get(PROP_RATING, {}).get("number")
+            poster_files = props.get(PROP_POSTER, {}).get("files", [])
+            poster_url = None
+
+            if poster_files:
+                first_file = poster_files[0]
+                if first_file.get("type") == "external":
+                    poster_url = first_file.get("external", {}).get("url")
+                elif first_file.get("type") == "file":
+                    poster_url = first_file.get("file", {}).get("url")
+
+            platform_obj = props.get(PROP_PLATFORM, {}).get("select")
+            platform = platform_obj.get("name") if platform_obj else ""
+
+            genre_arr = props.get(PROP_GENRE, {}).get("multi_select", [])
+            genres = [g.get("name") for g in genre_arr if g.get("name")]
+
+            out.append(
+                {
+                    "id": page["id"],
+                    "title": title,
+                    "status": movie_status,
+                    "year": year,
+                    "rating": rating,
+                    "platform": platform,
+                    "genres": genres,
+                    "poster_url": poster_url,
+                }
+            )
+
+            if limit is not None and len(out) >= limit:
+                return out[:limit]
+
+        if not res.get("has_more"):
+            break
+
+        next_cursor = res.get("next_cursor")
+        if not next_cursor:
+            break
 
     return out
 
